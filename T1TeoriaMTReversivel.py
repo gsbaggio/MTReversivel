@@ -1,3 +1,6 @@
+# tirar aquele 'B' no final do output, tem um B a mais
+# colocar o passo 0 no inicio das 3 fases, só pra mostrar como começa
+
 import sys
 
 class Tape:
