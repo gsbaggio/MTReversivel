@@ -150,6 +150,11 @@ class ReversibleTuringMachine:
                 if (self.current_state, "/") in self.transitions_quadruple:
                     next_state, action = self.transitions_quadruple[(self.current_state, "/")]
                     
+                    # Store the intermediate state in history tape
+                    # This captures both the original state and symbol read
+                    self.tapes[1][self.heads[1]] = self.current_state
+                    self.heads[1] += 1  # Move history head after writing
+                    
                     # Update state
                     self.current_state = next_state
                     
@@ -169,17 +174,14 @@ class ReversibleTuringMachine:
                 if (self.current_state, current_symbol) in self.transitions_quadruple:
                     next_state, action = self.transitions_quadruple[(self.current_state, current_symbol)]
                     
-                    # Record overwritten symbol and full state name in history tape
-                    self.tapes[1][self.heads[1]] = current_symbol
-                    self.heads[1] += 1
-                    self.tapes[1][self.heads[1]] = self.current_state  # Store full state name
-                    self.heads[1] += 1
-                    
                     # Write new symbol on tape 1
                     self.tapes[0][self.heads[0]] = action
                     
                     # Update state
                     self.current_state = next_state
+                    
+                    # We don't store anything in history tape at this step
+                    # It will be stored after the movement operation
                 else:
                     print(f"No transition found for state {self.current_state} and symbol {current_symbol}")
                     return False
@@ -200,10 +202,14 @@ class ReversibleTuringMachine:
         self.heads[0] = 0
         self.heads[2] = 0
         
+        # Note: The history tape head position remains where it was
+        # (pointing to the rightmost non-blank cell, containing the state N)
+        
         # Print initial configuration for copy phase
         self.print_configuration()
         
         # Copy symbols from tape 1 to tape 3 until reaching blank
+        # No writing to history tape during this phase
         while self.tapes[0][self.heads[0]] != "B":
             self.tapes[2][self.heads[2]] = self.tapes[0][self.heads[0]]
             self.heads[0] += 1
@@ -220,27 +226,67 @@ class ReversibleTuringMachine:
         print("\nStarting Retrace Phase")
         print("-" * 60)
         
-        # Go back to beginning of history tape
-        self.heads[1] = max(0, self.heads[1] - 1)
+        # Move to the last written history position
+        self.heads[1] = 0
+        while self.heads[1] < len(self.tapes[1]) and self.tapes[1][self.heads[1]] != "B":
+            self.heads[1] += 1
+        self.heads[1] = max(0, self.heads[1] - 1)  # Step back to the last written entry
         
         # Print initial configuration for retrace phase
         self.print_configuration()
         
         steps = 0
-        while self.heads[1] > 0 and steps < 1000:
-            # Get state and symbol from history tape
-            prev_state = self.tapes[1][self.heads[1]]
-            self.heads[1] -= 1
-            prev_symbol = self.tapes[1][self.heads[1]]
-            self.heads[1] -= 1
-            
-            # Restore the original state and symbol
-            self.current_state = prev_state
-            self.tapes[0][self.heads[0]] = prev_symbol
-            
-            steps += 1
-            # Print configuration after every retrace step
-            self.print_configuration()
+        
+        # Continue until we reach the initial state or run out of history
+        while self.current_state != "1" and self.heads[1] >= 0 and steps < 1000:
+            # Get intermediate state from history
+            if self.heads[1] >= 0 and self.tapes[1][self.heads[1]] != "B":
+                intermediate_state = self.tapes[1][self.heads[1]]
+                
+                # Parse the intermediate state to get original state and symbol
+                # Format is "state'symbol"
+                if "'" in intermediate_state:
+                    parts = intermediate_state.split("'")
+                    original_state = parts[0]
+                    original_symbol = parts[1]
+                    
+                    # Determine the direction from the quadruple
+                    if (intermediate_state, "/") in self.transitions_quadruple:
+                        _, direction = self.transitions_quadruple[(intermediate_state, "/")]
+                        
+                        # Move in the opposite direction
+                        if direction == "R":
+                            # First move left
+                            if self.heads[0] > 0:
+                                self.heads[0] -= 1
+                        elif direction == "L":
+                            # First move right
+                            self.heads[0] += 1
+                        
+                        # Write the original symbol back to tape 1
+                        self.tapes[0][self.heads[0]] = original_symbol
+                        
+                        # Set the state to the original state
+                        self.current_state = original_state
+                    else:
+                        print(f"Error: No transition found for intermediate state {intermediate_state}")
+                        return False
+                else:
+                    print(f"Error: Invalid intermediate state format: {intermediate_state}")
+                    return False
+                
+                # Clear this history entry
+                self.tapes[1][self.heads[1]] = "B"
+                
+                # Move to previous history entry
+                self.heads[1] -= 1
+                
+                steps += 1
+                # Print configuration after every retrace step
+                self.print_configuration()
+            else:
+                # No more valid history entries
+                break
         
         print(f"Retrace phase completed in {steps} steps")
         return True
