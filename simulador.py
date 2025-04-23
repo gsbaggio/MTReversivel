@@ -193,44 +193,43 @@ class ReversibleTuringMachine:
         print(f"Forward phase completed in {steps} steps")
         return True
     
-    def simulate_copy(self):
+    def simulate_copy(self, end_pos):
         """Copy the output from tape 1 to tape 3"""
         print("\nStarting Copy Phase")
         print("-" * 60)
         
-        # Reset head positions for tape 1 and 3
+        # Reset head positions for tape 1 and tape 3
         self.heads[0] = 0
-        self.heads[2] = 0
-        
-        # Note: The history tape head position remains where it was
-        # (pointing to the rightmost non-blank cell, containing the state N)
+        self.heads[2] = 0  # Start at the beginning for copying
         
         # Print initial configuration for copy phase
         self.print_configuration()
         
         # Copy symbols from tape 1 to tape 3 until reaching blank
-        # No writing to history tape during this phase
         while self.tapes[0][self.heads[0]] != "B":
             self.tapes[2][self.heads[2]] = self.tapes[0][self.heads[0]]
             self.heads[0] += 1
-            self.heads[2] += 1
+            self.heads[2] += 1  # Move the output head in sync with the main head
             
             # Print configuration after every copy operation
             self.print_configuration()
         
+        # After copying is complete, position the output head at the final position of forward phase
+        self.heads[2] = end_pos
+        print("Final positioning of output tape head:")
+        self.print_configuration()
+        
         print("Copy phase completed")
         return True
     
-    def simulate_retrace(self):
+    def simulate_retrace(self, main_pos, history_pos):
         """Execute the retrace phase (reverse execution)"""
         print("\nStarting Retrace Phase")
         print("-" * 60)
         
-        # Move to the last written history position
-        self.heads[1] = 0
-        while self.heads[1] < len(self.tapes[1]) and self.tapes[1][self.heads[1]] != "B":
-            self.heads[1] += 1
-        self.heads[1] = max(0, self.heads[1] - 1)  # Step back to the last written entry
+        # Position the tape heads at the end positions of forward phase
+        self.heads[0] = main_pos
+        self.heads[1] = history_pos - 1  # Start reading from the last written history entry
         
         # Print initial configuration for retrace phase
         self.print_configuration()
@@ -318,16 +317,22 @@ class ReversibleTuringMachine:
         # Initialize tapes
         self.initialize_tapes()
         
-        # Run the three phases
+        # Run the forward phase
         forward_success = self.simulate_forward()
         if not forward_success:
             return False
         
-        copy_success = self.simulate_copy()
+        # Save the positions of tape heads at the end of forward phase
+        forward_end_main_pos = self.heads[0]
+        forward_end_history_pos = self.heads[1]
+        
+        # Run the copy phase
+        copy_success = self.simulate_copy(forward_end_main_pos)
         if not copy_success:
             return False
         
-        retrace_success = self.simulate_retrace()
+        # Run the retrace phase, starting from the saved positions
+        retrace_success = self.simulate_retrace(forward_end_main_pos, forward_end_history_pos)
         if not retrace_success:
             return False
         
